@@ -51,36 +51,12 @@ PALETTE = [
     ("cat_ol", "2a1418"), ("cat_dk", "b45a24"), ("cat_md", "d9772c"), ("cat", "f0913a"),
     ("cat_lt", "ffb65e"), ("cat_wh", "fff3e2"), ("cat_pink", "ff9aa8"),
     ("eye", "b9f25e"), ("pupil", "170f1f"), ("shine", "ffffff"), ("whisker", "cfc6e8"),
-    # HUD, rewards, fireflies
-    ("hud_hi", "f4f2ff"), ("hud_dim", "7a76b8"),
-    ("plus_hi", "fff3a0"), ("plus", "ffd84a"), ("plus_dim", "a8883a"),
+    # rewards, fireflies
+    ("spark_hi", "fff3a0"), ("spark", "ffd84a"), ("spark_dim", "a8883a"),
     ("ff_core", "fdffc2"), ("ff", "d6f06a"), ("ff_dim", "7d9a3e"),
 ]
 C = {name: i for i, (name, _) in enumerate(PALETTE)}
 SKY = [C[f"sky{k}"] for k in range(9)]
-
-FONT = {
-    "C": [".##", "#..", "#..", "#..", ".##"],
-    "P": ["##.", "#.#", "##.", "#..", "#.."],
-    "a": ["...", ".##", "#.#", "#.#", ".##"],
-    "e": ["...", ".#.", "###", "#..", ".##"],
-    "l": ["#.", "#.", "#.", "#.", ".#"],
-    "n": ["...", "##.", "#.#", "#.#", "#.#"],
-    "o": ["...", ".#.", "#.#", "#.#", ".#."],
-    "r": ["...", "#.#", "##.", "#..", "#.."],
-    "t": [".#.", "###", ".#.", ".#.", "..#"],
-    "u": ["...", "#.#", "#.#", "#.#", ".##"],
-    "v": ["...", "#.#", "#.#", "#.#", ".#."],
-    "0": ["###", "#.#", "#.#", "#.#", "###"],
-    "1": [".#", "##", ".#", ".#", ".#"],
-    "2": ["##.", "..#", ".#.", "#..", "###"],
-    "4": ["#.#", "#.#", "###", "..#", "..#"],
-    "5": ["###", "#..", "##.", "..#", "##."],
-    "+": ["...", ".#.", "###", ".#.", "..."],
-    "-": ["..", "..", "##", "..", ".."],
-    ".": [".", ".", ".", ".", "#"],
-    " ": ["..", "..", "..", "..", ".."],
-}
 
 # Front-facing orange tabby, left half; the right half is mirrored from it.
 CAT_HALF = [
@@ -174,18 +150,6 @@ def blit(c, rows, x, y, cmap):
                 put(c, x + i, y + j, cmap[ch])
 
 
-def text(c, s, x, y, col):
-    for ch in s:
-        glyph = FONT[ch]
-        blit(c, glyph, x, y, {"#": col})
-        x += len(glyph[0]) + 1
-    return x - 1
-
-
-def text_width(s):
-    return sum(len(FONT[ch][0]) + 1 for ch in s) - 1
-
-
 def stroke(c, pts, radius, fill, outline="box_ol"):
     """Draw an outlined polyline; radius and fill may depend on the segment index."""
     n = len(pts) - 1
@@ -257,8 +221,6 @@ def make_stars():
     mx, my, mr = MOON
     while len(stars) < 42:
         x, y = rng.randrange(2, W - 2), rng.randrange(1, 50)
-        if x < 64 and y < 20:  # HUD
-            continue
         if math.hypot(x - mx, y - my) < mr + 7:
             continue
         if any(abs(x - sx) + abs(y - sy) < 6 for sx, sy, *_ in stars):
@@ -348,11 +310,10 @@ def draw_track(c):
     rect(c, x0, RAIL_Y + 1, x1, RAIL_Y + 1, "rail")
     for x in (x0, x1):
         rect(c, x - 1, RAIL_Y - 2, x + 1, RAIL_Y + 1, "rail_sh")
-    for x, label in zip(LIMITS, ("-2.4", "+2.4")):
+    for x in LIMITS:
         rect(c, x, RAIL_Y - 6, x, RAIL_Y - 1, "post")
         rect(c, x + 1, RAIL_Y - 6, x + 3, RAIL_Y - 5, "flag")
         put(c, x + 1, RAIL_Y - 4, "flag")
-        text(c, label, x - text_width(label) // 2, GROUND_Y + 4, "hud_dim")
 
 
 def build_background():
@@ -365,8 +326,6 @@ def build_background():
     draw_city(c)
     draw_ground(c)
     draw_track(c)
-    text(c, "CatPole-v1", 5, 4, "hud_hi")
-    text(c, "return 500.0", 5, 11, "hud_dim")
     return c
 
 
@@ -411,12 +370,6 @@ def draw_city_lights(c, i):
             put(c, x, y, "bld")
     if i % 25 < 6:
         put(c, TOWER_X, TOWER_TOP - 1, "beacon")
-
-
-def draw_hud_cursor(c, i):
-    if i % 25 < 13:
-        x = 5 + text_width("return 500.0") + 2
-        rect(c, x, 11, x + 2, 15, "hud_dim")
 
 
 # ---------------------------------------------------------------- the cart-pole
@@ -546,15 +499,20 @@ def draw_grass_flies(c, i):
 
 
 def draw_rewards(c, i, cx, cy):
-    """+1 per step, as in CartPole; each pop rises beside the cat and fades."""
+    """A reward per step, as in CartPole; each sparkle rises beside the cat and fades."""
     for j, s in enumerate(REWARDS):
         a = age(i, s)
         if a >= REWARD_LIFE:
             continue
-        x = cx + (CAT_W + 3 if j % 2 == 0 else -9)
-        y = cy + 6 - a // 3
-        col = "plus_hi" if a < 3 else "plus" if a < REWARD_LIFE - 6 else "plus_dim"
-        text(c, "+1", x, y, col)
+        x = cx + (CAT_W + 4 if j % 2 == 0 else -5)
+        y = cy + 8 - a // 3
+        arm = 0 if a < 2 or a >= REWARD_LIFE - 3 else 1 if a < 5 or a >= REWARD_LIFE - 8 else 2
+        dim = a >= REWARD_LIFE - 8
+        for k in range(1, arm + 1):
+            col = "spark_dim" if dim or k == 2 else "spark"
+            for ox, oy in ((k, 0), (-k, 0), (0, k), (0, -k)):
+                put(c, x + ox, y + oy, col)
+        put(c, x, y, "spark" if dim else "spark_hi")
 
 
 def render(i):
@@ -563,7 +521,6 @@ def render(i):
     draw_stars(c, i)
     draw_shooting_star(c, i)
     draw_city_lights(c, i)
-    draw_hud_cursor(c, i)
     draw_grass_flies(c, i)
 
     hx, tx, ty, theta, xo = pose(i)
