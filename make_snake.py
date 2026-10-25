@@ -2,11 +2,11 @@
 """A Tonkinese cat eats a GitHub contribution graph, snake style, as a looping pixel-art GIF.
 
 The graph is the public one from github.com/users/<user>/contributions. The cat runs
-the rows like the snake in Snake, eating every day that has contributions. Once the
-year is gone it naps while the graph grows back, then runs off the right edge and
-comes back on the left, so the loop is seamless.
+the rows like the snake in Snake, eating every day that has contributions for a +1.
+Once the year is gone it naps while the graph grows back, then runs off the right
+edge and comes back on the left, so the loop is seamless.
 
-The art is 400x64, scaled up 4x with nearest-neighbour and meant to be shown 800px
+The art is 400x72, scaled up 4x with nearest-neighbour and meant to be shown 800px
 wide. One GIF is written per GitHub theme, in GitHub's own contribution colours.
 
     python make_snake.py                    # writes assets/catsnake-{light,dark}.gif
@@ -24,27 +24,31 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-W, H = 400, 64
+W, H = 400, 72
 SCALE = 4
 FPS = 25
 WEEKS, DAYS = 53, 7
 CELL, PITCH = 5, 7
-GRID_X, GRID_Y = 15, 9
+GRID_X, GRID_Y = 15, 17  # headroom above the top row for its +1s
 SPEED = 5  # px per frame
 HOP = 8  # frames to turn round at the end of a row
 JUMP = 3  # px the hop rises
 CRUMB_LIFE = 7
+REWARD_LIFE = 10
+RISE = 3  # a +1 starts this far above its day and floats up 1px a frame
 NAP = 80  # frames asleep; the graph grows back meanwhile
 POP = 3  # frames for a cell to grow back
 
 # Colours that follow the GitHub theme: the page background, contribution levels 0-4
-# (Primer's), and the crumbs knocked off cells of levels 1-4.
+# (Primer's), the crumbs knocked off cells of levels 1-4, and the +1 for each day eaten.
 THEMES = {
-    "light": ("ffffff", ["eff2f5", "aceebb", "4ac26b", "2da44e", "116329"], ["4ac26b", "4ac26b", "2da44e", "116329"]),
-    "dark": ("0d1117", ["151b23", "033a16", "196c2e", "2ea043", "56d364"], ["2ea043", "2ea043", "56d364", "56d364"]),
+    "light": ("ffffff", ["eff2f5", "aceebb", "4ac26b", "2da44e", "116329"], ["4ac26b", "4ac26b", "2da44e", "116329"],
+              "1a7f37"),
+    "dark": ("0d1117", ["151b23", "033a16", "196c2e", "2ea043", "56d364"], ["2ea043", "2ea043", "56d364", "56d364"],
+             "56d364"),
 }
 THEME_NAMES = (["bg"] + [f"lv{k}" for k in range(5)] + [f"lv{k}c" for k in range(5)]
-               + [f"crumb{k}" for k in range(1, 5)])
+               + [f"crumb{k}" for k in range(1, 5)] + ["plus", "plus_dim"])
 # The cat looks the same on both: a platinum mink is pale silvery grey with warm
 # overtones, frosty grey points, lavender-pink nose and aqua eyes.
 SHARED = [
@@ -149,6 +153,13 @@ SPRITES["stretch"] = [
     "...oPPo.....oSBBBBBBBmPPPPo..",
     "...oQQo.....oQQPPPPPPPPPPPPo.",
     "...oooo......ooooooooooooooo.",
+]
+PLUS_ONE = [
+    ".....#",
+    ".#..##",
+    "###..#",
+    ".#...#",
+    ".....#",
 ]
 BOB = {"A": -1, "C": -1}  # the body rises while all four paws are off the ground
 RUN = ["A", "B", "C", "D"]
@@ -295,6 +306,13 @@ def draw_crumbs(c, grid, eaten, t):
             put(c, round(x0 + vx * a), round(y0 + vy * a + 0.25 * a * a), f"crumb{grid[row, col]}")
 
 
+def draw_rewards(c, eaten, t):
+    """A +1 floats up off each day the frame after it is eaten, from behind the cat's head."""
+    for row, col in zip(*np.nonzero((eaten >= 0) & (eaten < t) & (t < eaten + REWARD_LIFE))):
+        a = t - eaten[row, col]
+        blit(c, PLUS_ONE, cell_x(col), cell_y(row) - RISE - a, {"#": "plus" if a < REWARD_LIFE - 4 else "plus_dim"})
+
+
 def draw_cat(c, cx, y, facing, name):
     rows = SPRITES[name]
     w = len(rows[0])
@@ -318,6 +336,7 @@ def render(t, grid, route):
     c = np.full((H, W), C["bg"], np.uint8)
     draw_graph(c, grid, eaten, grown, t)
     draw_crumbs(c, grid, eaten, t)
+    draw_rewards(c, eaten, t)
     draw_cat(c, *poses[t])
     if poses[t][3] == "sleep":
         draw_bubble(c, poses[t][0], poses[t][1], t)
@@ -331,9 +350,10 @@ def blend(a, b, f):
 
 
 def palette(theme):
-    bg, levels, crumbs = THEMES[theme]
+    bg, levels, crumbs, plus = THEMES[theme]
     corners = [blend(lv, bg, 0.35) for lv in levels]
-    return [v for h in [bg] + levels + corners + crumbs + [h for _, h in SHARED] for v in bytes.fromhex(h)]
+    rewards = [plus, blend(plus, bg, 0.55)]
+    return [v for h in [bg] + levels + corners + crumbs + rewards + [h for _, h in SHARED] for v in bytes.fromhex(h)]
 
 
 def to_image(frame, theme, scale=SCALE):
