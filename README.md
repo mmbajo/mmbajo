@@ -1,6 +1,6 @@
-<h1 align="center">Hi, I'm Mark</h1>
+<p align="center">hi, i'm mark</p>
 
-<p align="center">I do LLM post-training and scaling RL.</p>
+<p align="center">i do LLM post-training and scaling RL for emerging agentic capabilities.</p>
 
 <p align="center">
   <picture>
